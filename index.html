@@ -55,7 +55,8 @@ details{margin-top:14px;color:var(--mut);font-size:13px}summary{cursor:pointer;c
 </div>
 <div class="row">
   <button id="bStart">Avvia camera</button>
-  <button id="bCal" disabled>Calibra (tra 3 s)</button>
+  <button id="bGo" disabled>Via</button>
+  <button id="bCal" class="sec" disabled>Calibra</button>
   <button id="bFlip" class="sec" disabled>Inverti camera</button>
 </div>
 
@@ -84,7 +85,7 @@ details{margin-top:14px;color:var(--mut);font-size:13px}summary{cursor:pointer;c
 
 <details>
   <summary>Come ottenere misure affidabili</summary>
-  <p>Appoggia il telefono fermo a circa 3 m, con l’obiettivo all’altezza dei fianchi e il corpo intero in inquadratura (piedi compresi). Premi Calibra: hai 3 s per andare in posizione (i beep ti guidano), poi resta fermo ~1 s. Quando senti il beep lungo, salta. Se ti sposti ricalibra. Per la distanza riprendi di lato.</p>
+  <p>Appoggia il telefono fermo a circa 3 m, obiettivo all’altezza dei fianchi, corpo intero in inquadratura (piedi compresi), buona luce (con poca luce la camera scende a 30 fps). <b>Calibra</b> la prima volta o se ti sposti; <b>Via</b> per ogni salto successivo (ri-azzera il suolo). Dopo il clic hai 3 s per andare in posizione e restare fermi ~1 s: al beep lungo salta. Dopo ogni salto l’app si ferma e ignora tutto finché non premi di nuovo Via (si ferma anche dopo 30 s senza salti).</p>
   <p>Altezza = g·t²/8 dal tempo di volo (interpolato tra i fotogrammi). Distanza e alzata anche usano una scala stimata dalla tua altezza (±5–10%). I dati sono salvati su questo dispositivo: usa Esporta backup per non perderli e aggiungi la pagina alla Home per evitare la pulizia automatica di Safari.</p>
 </details>
 </main>
@@ -97,7 +98,7 @@ const $=s=>document.querySelector(s);
 const video=$('#v'),cv=$('#c'),ctx=cv.getContext('2d'),stage=$('#stage'),gc=$('#g'),gx=gc.getContext('2d'),pg=$('#pg'),px=pg.getContext('2d');
 const G=9.81,THR=0.035;
 let landmarker,stream,facing='user',loopId=0,lastDet=0,errs=0;
-let mode='off',cal=null,calBuf=[],calStart=0,cdEnd=0,cdLast=0,sm=null,prev=null,air=null,coolUntil=0,lastOk=0,trail=[],trace=[],ft=[];
+let mode='off',cal=null,calBuf=[],calStart=0,cdEnd=0,cdLast=0,sm=null,prev=null,air=null,lastOk=0,calFull=true,armedAt=0,camFps=0,trail=[],trace=[],ft=[];
 
 /* ---------- memoria utenti / progressi ---------- */
 let db={users:{},cur:null};
@@ -142,6 +143,7 @@ function beep(f=880,d=.12){try{ac=ac||new (window.AudioContext||window.webkitAud
 let lastSt='';
 function status(t,c=''){if(t+c===lastSt)return;lastSt=t+c;const s=$('#st');s.textContent=t;s.className=c}
 const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
+function resetCal(){resetCal();$('#bGo').disabled=true}
 if(window.self!==window.top||!window.isSecureContext)status('Camera bloccata qui: apri la pagina in Safari/Chrome da https o localhost');
 
 /* ---------- modello e camera ---------- */
@@ -156,18 +158,24 @@ async function fallback(){
   if(delegate==='CPU')return;delegate='CPU';errs=0;loopId++;landmarker=null;status('Passo alla modalità compatibile…');
   try{await initModel();loop()}catch(e){status('Errore modello: ricarica la pagina')}
 }
+async function openCam(){
+  const v=[{width:{ideal:1280},height:{ideal:720},frameRate:{exact:60}},{width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60}},{width:{ideal:640},height:{ideal:480},frameRate:{ideal:60}}];
+  let err;
+  for(const c of v){try{return await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,...c},audio:false})}catch(e){err=e;if(e.name==='NotAllowedError'||e.name==='SecurityError')break}}
+  throw err;
+}
 async function startCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('Camera non disponibile: serve https');return}
   loopId++;if(stream)stream.getTracks().forEach(t=>t.stop());
   status('Avvio camera…');
-  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:640},height:{ideal:480},frameRate:{ideal:60,min:24}},audio:false})}
-  catch(e){status('Camera non accessibile ('+e.name+'): consenti il permesso e riprova');return}
+  try{stream=await openCam()}catch(e){status('Camera non accessibile ('+e.name+'): consenti il permesso e riprova');return}
   video.srcObject=stream;await video.play();
+  camFps=Math.round(stream.getVideoTracks()[0].getSettings().frameRate||0);
   cv.width=video.videoWidth;cv.height=video.videoHeight;stage.style.aspectRatio=cv.width+'/'+cv.height;
   video.style.transform=cv.style.transform=facing==='user'?'scaleX(-1)':'none';
   if(!landmarker){status('Carico il modello…');try{await initModel()}catch(e){status('Modello non caricato ('+(e.message||e.name)+'): serve internet');return}}
   mode='idle';cal=null;sm=null;prev=null;air=null;trail=[];
-  $('#bCal').disabled=false;$('#bFlip').disabled=false;$('#bStart').textContent='Riavvia camera';
+  $('#bCal').disabled=false;$('#bFlip').disabled=false;$('#bGo').disabled=true;$('#bStart').textContent='Riavvia camera';
   loop();
 }
 function loop(){
@@ -185,33 +193,35 @@ function loop(){
 }
 
 /* ---------- misura ---------- */
-const FEET=[27,28,29,30,31,32];
 function measure(L,W,H){
   const wavg=(a,k)=>{let s=0,n=0;for(const i of a){const v=L[i].visibility??1;s+=L[i][k]*v;n+=v}return[n?s/n:0,n/a.length]};
-  const[fy,vf]=wavg(FEET,'y'),[fx]=wavg(FEET,'x'),[hy,vh]=wavg([23,24],'y'),[hx]=wavg([23,24],'x'),[ay]=wavg([27,28],'y');
-  if(vf<.3||vh<.3||(L[0].visibility??1)<.3)return null;
-  return{foot:fy*H,x:fx*W,hip:hy*H,hx:hx*W,ankleY:ay*H,noseY:L[0].y*H};
+  const pts=[29,30,31,32].filter(i=>(L[i].visibility??1)>=.3);          // tallone/punta di entrambi i piedi
+  const[hy,vh]=wavg([23,24],'y'),[hx]=wavg([23,24],'x'),[ay]=wavg([27,28],'y');
+  if(pts.length<2||vh<.3||(L[0].visibility??1)<.3)return null;
+  // il piede e' "in aria" solo quando anche il suo punto PIU' BASSO si stacca dal suolo
+  return{foot:Math.max(...pts.map(i=>L[i].y))*H,x:pts.reduce((s,i)=>s+L[i].x,0)/pts.length*W,hip:hy*H,hx:hx*W,ankleY:ay*H,noseY:L[0].y*H};
 }
 function process(t){
   const now=performance.now()/1000;lastDet=Math.max(now*1000,lastDet+1);
   let r;try{r=landmarker.detectForVideo(video,lastDet)}catch(e){if(++errs>3)fallback();return}
   const W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
   ft.push(now);if(ft.length>30)ft.shift();
-  if(ft.length>5)$('#fps').textContent='analisi '+Math.round((ft.length-1)/(now-ft[0]))+' fps';
+  if(ft.length>5)$('#fps').textContent=(camFps?'camera '+camFps+' · ':'')+'analisi '+Math.round((ft.length-1)/(now-ft[0]))+' fps';
   const L=r.landmarks&&r.landmarks[0];
   if(L)drawPose(L,W,H);
-  drawCal(W,H);
+  drawCal(W);
   if(mode==='count'){
     const rem=Math.ceil(cdEnd-now);
     if(rem<=0){mode='calib';calBuf=[];calStart=now;$('#cd').style.display='none';beep(1200,.25)}
-    else{$('#cd').style.display='block';$('#cd').textContent=rem;if(rem!==cdLast){cdLast=rem;beep(660)}status('Vai in posizione… calibrazione tra '+rem+' s')}
+    else{$('#cd').style.display='block';$('#cd').textContent=rem;if(rem!==cdLast){cdLast=rem;beep(660)}status('Vai in posizione… tra '+rem+' s')}
     return;
   }
   if(mode==='idle'){status(L?'Premi Calibra: hai 3 s per posizionarti':'Nessuna persona rilevata');return}
+  if(mode==='ready')return;                         // fermo: nessun salto viene rilevato finché non premi Via
   const m=L&&measure(L,W,H);
   if(!m){
     if(mode==='calib')calBuf=[];
-    if(mode==='air'&&t-lastOk>.3){mode='armed';status('Tracciamento perso, riprova','go')}
+    if(mode==='air'&&t-lastOk>.3){mode='ready';status('Tracciamento perso: premi Via')}
     else if(mode!=='air')status('Porta nel campo visivo corpo e piedi');
     return;
   }
@@ -222,20 +232,21 @@ function process(t){
     if(now-calStart>=1.2){
       const fy=calBuf.map(b=>b.foot).sort((a,b)=>a-b),bp=med(calBuf.map(b=>b.ankleY-b.noseY)),q=fy.length>>3;
       if(calBuf.length<6||fy[fy.length-1-q]-fy[q]>.08*bp){calBuf=[];calStart=now;status('Troppo movimento: resta fermo');return}
-      cal={ground:med(fy),hip:med(calBuf.map(b=>b.hip)),bodyPx:bp,scale:bp/(.88*U().height)};
-      mode='armed';sm=0;prev=null;beep(880,.5);
+      const g=med(fy),hp=med(calBuf.map(b=>b.hip));
+      if(calFull||!cal)cal={ground:g,hip:hp,bodyPx:bp,scale:bp/(.88*U().height)};else{cal.ground=g;cal.hip=hp}
+      mode='armed';armedAt=now;sm=0;prev=null;trace=[];$('#bGo').disabled=false;beep(880,.5);
     }
     return;
   }
   if(!cal)return;
+  if(mode==='armed'&&now-armedAt>30){mode='ready';status('Tempo scaduto: premi Via');return}
 
   const lift=cal.ground-m.foot,thr=cal.bodyPx*THR;
-  if(mode!=='air'&&lift<thr*.5)cal.ground+=.05*(m.foot-cal.ground); // la linea del suolo segue piccole derive
+  if(mode==='armed'&&lift<thr*.5)cal.ground+=.05*(m.foot-cal.ground);
   sm=sm==null?lift:sm+.7*(lift-sm);
   trace.push({t,v:sm});while(trace.length&&t-trace[0].t>4)trace.shift();
   drawTrace(thr);
 
-  if(mode==='cool'&&now>coolUntil&&sm<thr)mode='armed';
   if(mode==='armed'){
     status('Pronto: salta!','go');
     if(prev&&prev.sm<=thr&&sm>thr){
@@ -245,18 +256,20 @@ function process(t){
   }else if(mode==='air'){
     air.peak=Math.max(air.peak,sm);air.hipMin=Math.min(air.hipMin,m.hip);trail.push([m.hx,m.hip]);
     if(sm<thr){
-      const k=(prev.sm-thr)/((prev.sm-sm)||1),fl=prev.t+(t-prev.t)*k-air.t0,ok=fl>.15&&fl<1.2&&air.peak>thr*2;
-      if(ok)finish(fl,Math.abs(m.x-air.x0)/cal.scale,(cal.hip-air.hipMin)/cal.scale);
-      else status('Non valido ('+Math.round(fl*1000)+' ms): riprova','go');
-      mode=ok?'cool':'armed';coolUntil=now+1.5;
-    }else if(t-air.t0>1.6){mode='armed';cal.ground=m.foot;sm=0;status('Riallineato: riprova','go')}
+      const k=(prev.sm-thr)/((prev.sm-sm)||1),fl=prev.t+(t-prev.t)*k-air.t0;
+      const h=G*fl*fl/8*100,hipUp=(cal.hip-air.hipMin)/cal.scale;
+      // filtri anti-falsi: durata plausibile, piedi sollevati abbastanza, anche che salgono in modo coerente
+      const ok=fl>.15&&fl<1.2&&air.peak>thr*2&&hipUp>.4*h;
+      if(ok)finish(fl,Math.abs(m.x-air.x0)/cal.scale,hipUp);else status('Non valido ('+Math.round(fl*1000)+' ms): premi Via');
+      mode='ready';
+    }else if(t-air.t0>1.6){mode='ready';status('Salto non rilevato: premi Via')}
   }
   prev={t,sm,x:m.x};
 }
 function finish(fl,dx,hip){
   const h=G*fl*fl/8*100;
   U().jumps.push({ts:Date.now(),h,fl:fl*1000,dx,hip});save();renderAll();
-  status('Salto registrato: '+h.toFixed(1)+' cm','go');beep(1000,.12);setTimeout(()=>beep(1400,.2),160);
+  status('Salto: '+h.toFixed(1)+' cm · premi Via per il prossimo','go');beep(1000,.12);setTimeout(()=>beep(1400,.2),160);
 }
 
 /* ---------- disegno ---------- */
@@ -290,19 +303,22 @@ function drawTrace(thr){
 /* ---------- UI ---------- */
 $('#bStart').onclick=startCam;
 $('#bFlip').onclick=()=>{facing=facing==='user'?'environment':'user';startCam()};
-$('#bCal').onclick=()=>{
+function startCount(full){
+  if(!landmarker||mode==='off')return;
   U().height=parseFloat($('#hgt').value)||175;save();beep(440,.05);
-  cal=null;trace=[];trail=[];prev=null;cdLast=0;cdEnd=performance.now()/1000+3;mode='count';
-};
-$('#hgt').onchange=()=>{U().height=parseFloat($('#hgt').value)||175;save();if(cal){cal=null;mode='idle'}};
-$('#usr').onchange=e=>{db.cur=e.target.value;save();cal=null;if(mode!=='off')mode='idle';renderAll()};
+  if(full)cal=null;calFull=full;trace=[];trail=[];prev=null;sm=0;cdLast=0;cdEnd=performance.now()/1000+3;mode='count';
+}
+$('#bCal').onclick=()=>startCount(true);
+$('#bGo').onclick=()=>startCount(false);
+$('#hgt').onchange=()=>{U().height=parseFloat($('#hgt').value)||175;save();if(cal)resetCal();};
+$('#usr').onchange=e=>{db.cur=e.target.value;save();resetCal();renderAll()};
 $('#bNew').onclick=()=>{
   const n=(prompt('Nome del nuovo utente')||'').trim();if(!n)return;
-  const id='u'+Date.now();db.users[id]={name:n,height:parseFloat($('#hgt').value)||175,jumps:[]};db.cur=id;save();cal=null;if(mode!=='off')mode='idle';renderAll();
+  const id='u'+Date.now();db.users[id]={name:n,height:parseFloat($('#hgt').value)||175,jumps:[]};db.cur=id;save();resetCal();renderAll();
 };
 $('#bDel').onclick=()=>{
   if(!confirm('Eliminare l’utente “'+U().name+'” e tutti i suoi salti?'))return;
-  delete db.users[db.cur];if(!Object.keys(db.users).length)mkDefault();db.cur=Object.keys(db.users)[0];save();cal=null;if(mode!=='off')mode='idle';renderAll();
+  delete db.users[db.cur];if(!Object.keys(db.users).length)mkDefault();db.cur=Object.keys(db.users)[0];save();resetCal();renderAll();
 };
 $('#bUndo').onclick=()=>{U().jumps.pop();save();renderAll()};
 $('#bExp').onclick=()=>{
