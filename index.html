@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Misuratore di salto</title>
+<style>
+:root{--bg:#e8edf2;--ink:#0f2238;--mut:#5d6f84;--card:#fff;--line:#d3dbe4;--ac:#2450ff;--hot:#ff5a36}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Avenir Next","Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:14px 14px 40px}
+h1{font-size:20px;margin:6px 0 2px;letter-spacing:-.01em}
+.sub{color:var(--mut);margin:0 0 12px;font-size:13px}
+.stage{position:relative;background:#0b1522;border-radius:12px;overflow:hidden;aspect-ratio:16/9;max-height:70vh;margin:0 auto}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#st{position:absolute;left:10px;right:10px;bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(15,34,56,.82);color:#fff;font-weight:600;font-size:14px}
+#st.go{background:var(--ac)}#st.air{background:var(--hot)}
+#fps{position:absolute;top:8px;right:10px;color:#fff;font-size:12px;text-shadow:0 1px 3px #000}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:end}
+button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:10px 14px;background:var(--ink);color:#fff;cursor:pointer}
+button.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input{font:inherit;width:96px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card b{display:block;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.card.main{grid-column:1/-1;background:var(--ink);color:#fff;border:0}
+.card.main b{font-size:52px}
+.card span{font-size:12px;color:var(--mut)}.card.main span{color:#a9bad0}
+#g{width:100%;height:90px;background:#fff;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+ol{padding:0;margin:8px 0 0;list-style:none}
+li{display:flex;justify-content:space-between;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-variant-numeric:tabular-nums}
+li.best{border-color:var(--ac);box-shadow:inset 3px 0 0 var(--ac)}
+details{margin-top:14px;color:var(--mut);font-size:13px}
+summary{cursor:pointer;color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>Misuratore di salto da fermo</h1>
+<p class="sub">Tutto gira nel browser: il video non lascia il dispositivo.</p>
+
+<div class="stage" id="stage">
+  <video id="v" playsinline muted></video>
+  <canvas id="c"></canvas>
+  <div id="fps"></div>
+  <div id="st">Premi “Avvia camera”</div>
+</div>
+
+<div class="row">
+  <label>La tua altezza (cm)<input id="hgt" type="number" min="100" max="230" value="175"></label>
+  <button id="bStart">Avvia camera</button>
+  <button id="bCal" class="sec" disabled>Calibra</button>
+  <button id="bFlip" class="sec" disabled>Inverti camera</button>
+</div>
+
+<div class="grid">
+  <div class="card main"><b id="rH">–</b><span>Altezza del salto (da tempo aereo), cm</span></div>
+  <div class="card"><b id="rT">–</b><span>Tempo aereo, ms</span></div>
+  <div class="card"><b id="rD">–</b><span>Distanza orizzontale, cm</span></div>
+  <div class="card"><b id="rHip">–</b><span>Alzata delle anche, cm</span></div>
+  <div class="card"><b id="rN">0</b><span>Salti registrati</span></div>
+</div>
+<canvas id="g" width="700" height="90"></canvas>
+
+<ol id="hist"></ol>
+<div class="row"><button id="bReset" class="sec">Azzera risultati</button></div>
+
+<details>
+  <summary>Come ottenere misure affidabili</summary>
+  <p>Appoggia il telefono fermo, a circa 3 m, con l’obiettivo all’altezza dei fianchi e il corpo intero in inquadratura (piedi compresi). Per la distanza orizzontale riprendi di lato; per l’altezza va bene anche di fronte. Luce uniforme, abiti aderenti. Premi Calibra restando fermo 1,5 s, poi salta.</p>
+  <p>Altezza = g·t²/8, dove t è il tempo di volo: dipende solo dal tempo e non dalla scala. Il tempo è misurato con interpolazione tra i fotogrammi, quindi l’errore tipico è di pochi ms a 30–60 fps. Distanza e alzata anche usano la scala ricavata dalla tua altezza (stima ±5–10%).</p>
+</details>
+</main>
+
+<script type="module">
+let PoseLandmarker,FilesetResolver;
+const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const $=s=>document.querySelector(s);
+const video=$('#v'),cv=$('#c'),ctx=cv.getContext('2d'),stage=$('#stage'),gc=$('#g'),gx=gc.getContext('2d');
+const G=9.81,THR=0.025; // soglia = 2.5% dell'altezza corpo in pixel
+let landmarker,stream,facing='user',loopId=0,lastDet=0;
+let mode='off',cal=null,calBuf=[],calStart=0,sm=null,prev=null,air=null,coolUntil=0;
+let trail=[],trace=[],ft=[],hist=[];
+try{const h=localStorage.getItem('hgt');if(h)$('#hgt').value=h}catch(e){}
+
+function status(t,c=''){const s=$('#st');s.textContent=t;s.className=c}
+if(window.self!==window.top||!window.isSecureContext)status('Camera bloccata in questa anteprima: scarica il file e aprilo in Chrome o Safari (da localhost o https)');
+const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
+
+async function initModel(){
+  if(!PoseLandmarker)({PoseLandmarker,FilesetResolver}=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"));
+  const fs=await FilesetResolver.forVisionTasks(WASM);
+  const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
+  try{landmarker=await mk("GPU")}catch(e){landmarker=await mk("CPU")}
+}
+
+async function startCam(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('Camera non disponibile: apri la pagina da https o da localhost');return}
+  loopId++;
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  status('Avvio camera…');
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60}},audio:false});
+  }catch(e){status('Camera non accessibile ('+e.name+'): consenti il permesso nel browser e riprova');return}
+  video.srcObject=stream;await video.play();
+  cv.width=video.videoWidth;cv.height=video.videoHeight;
+  stage.style.aspectRatio=cv.width+'/'+cv.height;
+  video.style.transform=cv.style.transform=facing==='user'?'scaleX(-1)':'none';
+  if(!landmarker){status('Carico il modello di riconoscimento…');try{await initModel()}catch(e){status('Modello non caricato ('+(e.message||e.name)+'): serve internet');return}}
+  mode='idle';cal=null;sm=null;prev=null;air=null;trail=[];
+  $('#bCal').disabled=false;$('#bFlip').disabled=false;$('#bStart').textContent='Riavvia camera';
+  status('Inquadra il corpo intero, poi premi Calibra');
+  loop();
+}
+
+function loop(){
+  const id=++loopId;
+  const step=(now,meta)=>{
+    if(id!==loopId)return;
+    if(video.readyState>=2){
+      const t=((meta&&(meta.captureTime||meta.presentationTime))||now)/1000;
+      try{process(t)}catch(e){console.error(e)}
+    }
+    sched();
+  };
+  const sched=()=>video.requestVideoFrameCallback?video.requestVideoFrameCallback(step):requestAnimationFrame(n=>step(n));
+  sched();
+}
+
+const FEET=[29,30,31,32];
+function measure(L,W,H){
+  const need=[0,23,24,27,28,29,30,31,32];
+  if(need.some(i=>(L[i].visibility??0)<.4))return null;
+  const my=a=>a.reduce((s,i)=>s+L[i].y,0)/a.length*H;
+  const mx=a=>a.reduce((s,i)=>s+L[i].x,0)/a.length*W;
+  return{foot:my(FEET),hip:my([23,24]),noseY:L[0].y*H,ankleY:my([27,28]),x:mx([27,28,29,30]),hx:mx([23,24])};
+}
+
+function process(t){
+  const now=performance.now();lastDet=Math.max(now,lastDet+1);
+  const r=landmarker.detectForVideo(video,lastDet);
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  ft.push(t);if(ft.length>30)ft.shift();
+  if(ft.length>5){const dt=(ft[ft.length-1]-ft[0])/(ft.length-1);$('#fps').textContent=Math.round(1/dt)+' fps · passo '+Math.round(dt*1000)+' ms'}
+  drawCal(W,H);
+  const L=r.landmarks&&r.landmarks[0];
+  if(!L){if(mode==='calib')calBuf=[];if(mode==='idle'||mode==='calib')status('Nessuna persona rilevata');return}
+  drawPose(L,W,H);
+  const m=measure(L,W,H);
+  if(!m){if(mode==='calib')calBuf=[];if(mode!=='air'&&mode!=='cool')status('Porta nel campo visivo anche i piedi');return}
+
+  if(mode==='calib'){
+    calBuf.push(m);
+    const pct=Math.min(100,Math.round((t-calStart)/1.5*100));
+    status('Stai fermo… '+pct+'%');
+    if(t-calStart>=1.5){
+      const fy=calBuf.map(b=>b.foot),spread=Math.max(...fy)-Math.min(...fy);
+      if(spread>H*.03){calBuf=[];calStart=t;status('Troppo movimento: resta fermo');return}
+      const hcm=parseFloat($('#hgt').value)||175;
+      const bodyPx=med(calBuf.map(b=>b.ankleY-b.noseY));
+      cal={ground:med(fy),hip:med(calBuf.map(b=>b.hip)),bodyPx,scale:bodyPx/(0.88*hcm)};
+      mode='armed';sm=null;prev=null;status('Pronto: salta!','go');
+    }
+    return;
+  }
+  if(!cal)return;
+
+  const lift=cal.ground-m.foot;
+  sm=sm==null?lift:sm+.6*(lift-sm);
+  const thr=cal.bodyPx*THR;
+  trace.push({t,v:sm});while(trace.length&&t-trace[0].t>4)trace.shift();
+  drawTrace(thr);
+
+  if(mode==='cool'&&t>coolUntil&&sm<thr){mode='armed';status('Pronto: salta!','go')}
+  if(mode==='armed'&&prev&&sm>thr&&prev.sm<=thr){
+    const k=(thr-prev.sm)/(sm-prev.sm);
+    air={t0:prev.t+(t-prev.t)*k,x0:prev.x,peak:sm,hipMin:m.hip,x1:m.x};
+    trail=[];mode='air';status('In volo…','air');
+  }else if(mode==='air'){
+    air.peak=Math.max(air.peak,sm);air.hipMin=Math.min(air.hipMin,m.hip);
+    trail.push([m.hx,m.hip]);
+    if(sm<thr&&prev.sm>=thr){
+      const k=(prev.sm-thr)/(prev.sm-sm),t1=prev.t+(t-prev.t)*k,fl=t1-air.t0;
+      if(fl>0.12&&fl<1.3&&air.peak>thr*2)finish(fl,Math.abs(m.x-air.x0)/cal.scale,(cal.hip-air.hipMin)/cal.scale);
+      else status('Movimento non valido, riprova','go');
+      if(mode==='air'){mode='armed'}
+      coolUntil=t+1.2;if(fl>0.12&&fl<1.3&&air.peak>thr*2)mode='cool';
+    }else if(t-air.t0>1.5){mode='armed';status('Salto non rilevato, riprova','go')}
+  }
+  prev={t,sm,x:m.x};
+}
+
+function finish(fl,dx,hipUp){
+  const h=G*fl*fl/8*100;
+  hist.push({h,fl:fl*1000});
+  $('#rH').textContent=h.toFixed(1);
+  $('#rT').textContent=Math.round(fl*1000);
+  $('#rD').textContent=Math.round(dx);
+  $('#rHip').textContent=hipUp.toFixed(0);
+  $('#rN').textContent=hist.length;
+  renderHist();
+  status('Salto registrato: '+h.toFixed(1)+' cm','go');
+}
+function renderHist(){
+  const best=Math.max(...hist.map(x=>x.h));
+  $('#hist').innerHTML=hist.map((x,i)=>`<li class="${x.h===best?'best':''}"><span>Salto ${i+1}</span><span>${x.h.toFixed(1)} cm · ${Math.round(x.fl)} ms</span></li>`).reverse().join('');
+}
+
+const FACE=new Set([1,2,3,4,5,6,7,8,9,10]);
+function drawPose(L,W,H){
+  const lw=Math.max(2,W/320);
+  ctx.lineWidth=lw;ctx.strokeStyle='rgba(255,255,255,.9)';
+  for(const c of PoseLandmarker.POSE_CONNECTIONS){
+    if(FACE.has(c.start)||FACE.has(c.end))continue;
+    const a=L[c.start],b=L[c.end];
+    if((a.visibility??0)<.4||(b.visibility??0)<.4)continue;
+    ctx.beginPath();ctx.moveTo(a.x*W,a.y*H);ctx.lineTo(b.x*W,b.y*H);ctx.stroke();
+  }
+  L.forEach((p,i)=>{
+    if(FACE.has(i)||(p.visibility??0)<.4)return;
+    ctx.fillStyle=i>=27?'#ff5a36':'#2450ff';
+    ctx.beginPath();ctx.arc(p.x*W,p.y*H,lw*1.9,0,7);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=lw*.6;ctx.stroke();ctx.lineWidth=lw;
+  });
+  if(trail.length>1){
+    ctx.strokeStyle='#ffd23f';ctx.lineWidth=lw*1.5;ctx.beginPath();
+    trail.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
+  }
+}
+function drawCal(W,H){
+  if(!cal)return;
+  ctx.setLineDash([12,8]);ctx.lineWidth=2;
+  ctx.strokeStyle='#ff5a36';ctx.beginPath();ctx.moveTo(0,cal.ground);ctx.lineTo(W,cal.ground);ctx.stroke();
+  ctx.strokeStyle='rgba(255,210,63,.8)';const ty=cal.ground-cal.bodyPx*THR;
+  ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();
+  ctx.setLineDash([]);
+}
+function drawTrace(thr){
+  const w=gc.width,h=gc.height;gx.clearRect(0,0,w,h);
+  const top=Math.max(thr*8,...trace.map(p=>p.v));
+  const y=v=>h-6-(Math.max(v,0)/top)*(h-12);
+  gx.strokeStyle='#ffb199';gx.setLineDash([6,5]);gx.beginPath();gx.moveTo(0,y(thr));gx.lineTo(w,y(thr));gx.stroke();gx.setLineDash([]);
+  if(!trace.length)return;
+  const t0=trace[trace.length-1].t-4;
+  gx.strokeStyle='#2450ff';gx.lineWidth=2;gx.beginPath();
+  trace.forEach((p,i)=>{const x=(p.t-t0)/4*w;i?gx.lineTo(x,y(p.v)):gx.moveTo(x,y(p.v))});gx.stroke();
+}
+
+$('#bStart').onclick=startCam;
+$('#bFlip').onclick=()=>{facing=facing==='user'?'environment':'user';startCam()};
+$('#bCal').onclick=()=>{
+  try{localStorage.setItem('hgt',$('#hgt').value)}catch(e){}
+  calBuf=[];calStart=performance.now()/1000;cal=null;trace=[];mode='calib';status('Stai fermo… 0%');
+};
+$('#bReset').onclick=()=>{hist=[];$('#hist').innerHTML='';['rH','rT','rD','rHip'].forEach(i=>$('#'+i).textContent='–');$('#rN').textContent='0'};
+</script>
+</body>
+</html>
