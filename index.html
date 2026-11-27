@@ -3,125 +3,178 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Misuratore di salto</title>
 <style>
 :root{--bg:#e8edf2;--ink:#0f2238;--mut:#5d6f84;--card:#fff;--line:#d3dbe4;--ac:#2450ff;--hot:#ff5a36}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Avenir Next","Segoe UI",Roboto,sans-serif}
 main{max-width:720px;margin:0 auto;padding:14px 14px 40px}
-h1{font-size:20px;margin:6px 0 2px;letter-spacing:-.01em}
-.sub{color:var(--mut);margin:0 0 12px;font-size:13px}
-.stage{position:relative;background:#0b1522;border-radius:12px;overflow:hidden;aspect-ratio:16/9;max-height:70vh;margin:0 auto}
+h1{font-size:20px;margin:6px 0 10px;letter-spacing:-.01em}h2{font-size:15px;margin:18px 0 8px}
+.stage{position:relative;background:#0b1522;border-radius:12px;overflow:hidden;aspect-ratio:4/3;max-height:72vh;margin:0 auto}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-#st{position:absolute;left:10px;right:10px;bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(15,34,56,.82);color:#fff;font-weight:600;font-size:14px}
+#st{position:absolute;left:10px;right:10px;bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(15,34,56,.85);color:#fff;font-weight:600;font-size:14px}
 #st.go{background:var(--ac)}#st.air{background:var(--hot)}
 #fps{position:absolute;top:8px;right:10px;color:#fff;font-size:12px;text-shadow:0 1px 3px #000}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:end}
-button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:10px 14px;background:var(--ink);color:#fff;cursor:pointer}
-button.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
+#cd{display:none;position:absolute;inset:0;text-align:center;font-size:30vmin;font-weight:800;color:#fff;text-shadow:0 2px 14px #000;line-height:1;padding-top:12%}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:end}
+button,select{font:inherit;font-weight:600;border:0;border-radius:8px;padding:10px 14px;background:var(--ink);color:#fff;cursor:pointer}
+button.sec,select{background:#fff;color:var(--ink);border:1px solid var(--line)}
 button:disabled{opacity:.4;cursor:default}
-button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
-input{font:inherit;width:96px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+input{font:inherit;width:90px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
-.card b{display:block;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.card.main{grid-column:1/-1;background:var(--ink);color:#fff;border:0}
-.card.main b{font-size:52px}
-.card span{font-size:12px;color:var(--mut)}.card.main span{color:#a9bad0}
-#g{width:100%;height:90px;background:#fff;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+.card b{display:block;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.card span{font-size:12px;color:var(--mut)}
+.card.main{grid-column:1/-1;background:var(--ink);color:#fff;border:0}.card.main b{font-size:52px}.card.main span{color:#a9bad0}
+canvas.ch{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;display:block}
 ol{padding:0;margin:8px 0 0;list-style:none}
 li{display:flex;justify-content:space-between;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-variant-numeric:tabular-nums}
 li.best{border-color:var(--ac);box-shadow:inset 3px 0 0 var(--ac)}
-details{margin-top:14px;color:var(--mut);font-size:13px}
-summary{cursor:pointer;color:var(--ink);font-weight:600}
+details{margin-top:14px;color:var(--mut);font-size:13px}summary{cursor:pointer;color:var(--ink);font-weight:600}
 </style>
 </head>
 <body>
 <main>
 <h1>Misuratore di salto da fermo</h1>
-<p class="sub">Tutto gira nel browser: il video non lascia il dispositivo.</p>
+<div class="row">
+  <label>Utente<select id="usr"></select></label>
+  <label>Altezza (cm)<input id="hgt" type="number" min="100" max="230"></label>
+  <button id="bNew" class="sec">+ Utente</button>
+  <button id="bDel" class="sec">Elimina utente</button>
+</div>
 
 <div class="stage" id="stage">
   <video id="v" playsinline muted></video>
   <canvas id="c"></canvas>
+  <div id="cd"></div>
   <div id="fps"></div>
   <div id="st">Premi “Avvia camera”</div>
 </div>
-
 <div class="row">
-  <label>La tua altezza (cm)<input id="hgt" type="number" min="100" max="230" value="175"></label>
   <button id="bStart">Avvia camera</button>
-  <button id="bCal" class="sec" disabled>Calibra</button>
+  <button id="bCal" disabled>Calibra (tra 3 s)</button>
   <button id="bFlip" class="sec" disabled>Inverti camera</button>
 </div>
 
 <div class="grid">
-  <div class="card main"><b id="rH">–</b><span>Altezza del salto (da tempo aereo), cm</span></div>
+  <div class="card main"><b id="rH">–</b><span>Altezza ultimo salto (da tempo aereo), cm</span></div>
   <div class="card"><b id="rT">–</b><span>Tempo aereo, ms</span></div>
-  <div class="card"><b id="rD">–</b><span>Distanza orizzontale, cm</span></div>
-  <div class="card"><b id="rHip">–</b><span>Alzata delle anche, cm</span></div>
-  <div class="card"><b id="rN">0</b><span>Salti registrati</span></div>
+  <div class="card"><b id="rD">–</b><span>Distanza, cm</span></div>
+  <div class="card"><b id="rHip">–</b><span>Alzata anche, cm</span></div>
 </div>
-<canvas id="g" width="700" height="90"></canvas>
+<canvas id="g" class="ch" width="700" height="80" style="margin-top:8px"></canvas>
 
+<h2>Progressi</h2>
+<div class="grid">
+  <div class="card"><b id="sRec">–</b><span>Record, cm</span></div>
+  <div class="card"><b id="sAvg">–</b><span>Media ultimi 5, cm</span></div>
+  <div class="card"><b id="sN">0</b><span>Salti totali</span></div>
+</div>
+<canvas id="pg" class="ch" width="700" height="150" style="margin-top:8px"></canvas>
 <ol id="hist"></ol>
-<div class="row"><button id="bReset" class="sec">Azzera risultati</button></div>
+<div class="row">
+  <button id="bUndo" class="sec">Annulla ultimo salto</button>
+  <button id="bExp" class="sec">Esporta backup</button>
+  <button id="bImp" class="sec">Importa backup</button>
+  <input id="fImp" type="file" accept="application/json" hidden>
+</div>
 
 <details>
   <summary>Come ottenere misure affidabili</summary>
-  <p>Appoggia il telefono fermo, a circa 3 m, con l’obiettivo all’altezza dei fianchi e il corpo intero in inquadratura (piedi compresi). Per la distanza orizzontale riprendi di lato; per l’altezza va bene anche di fronte. Luce uniforme, abiti aderenti. Premi Calibra restando fermo 1,5 s, poi salta.</p>
-  <p>Altezza = g·t²/8, dove t è il tempo di volo: dipende solo dal tempo e non dalla scala. Il tempo è misurato con interpolazione tra i fotogrammi, quindi l’errore tipico è di pochi ms a 30–60 fps. Distanza e alzata anche usano la scala ricavata dalla tua altezza (stima ±5–10%).</p>
+  <p>Appoggia il telefono fermo a circa 3 m, con l’obiettivo all’altezza dei fianchi e il corpo intero in inquadratura (piedi compresi). Premi Calibra: hai 3 s per andare in posizione (i beep ti guidano), poi resta fermo ~1 s. Quando senti il beep lungo, salta. Se ti sposti ricalibra. Per la distanza riprendi di lato.</p>
+  <p>Altezza = g·t²/8 dal tempo di volo (interpolato tra i fotogrammi). Distanza e alzata anche usano una scala stimata dalla tua altezza (±5–10%). I dati sono salvati su questo dispositivo: usa Esporta backup per non perderli e aggiungi la pagina alla Home per evitare la pulizia automatica di Safari.</p>
 </details>
 </main>
 
 <script type="module">
-let PoseLandmarker,FilesetResolver;
+let PoseLandmarker,FilesetResolver,delegate='GPU';
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const $=s=>document.querySelector(s);
-const video=$('#v'),cv=$('#c'),ctx=cv.getContext('2d'),stage=$('#stage'),gc=$('#g'),gx=gc.getContext('2d');
-const G=9.81,THR=0.025; // soglia = 2.5% dell'altezza corpo in pixel
-let landmarker,stream,facing='user',loopId=0,lastDet=0;
-let mode='off',cal=null,calBuf=[],calStart=0,sm=null,prev=null,air=null,coolUntil=0;
-let trail=[],trace=[],ft=[],hist=[];
-try{const h=localStorage.getItem('hgt');if(h)$('#hgt').value=h}catch(e){}
+const video=$('#v'),cv=$('#c'),ctx=cv.getContext('2d'),stage=$('#stage'),gc=$('#g'),gx=gc.getContext('2d'),pg=$('#pg'),px=pg.getContext('2d');
+const G=9.81,THR=0.035;
+let landmarker,stream,facing='user',loopId=0,lastDet=0,errs=0;
+let mode='off',cal=null,calBuf=[],calStart=0,cdEnd=0,cdLast=0,sm=null,prev=null,air=null,coolUntil=0,lastOk=0,trail=[],trace=[],ft=[];
 
-function status(t,c=''){const s=$('#st');s.textContent=t;s.className=c}
-if(window.self!==window.top||!window.isSecureContext)status('Camera bloccata in questa anteprima: scarica il file e aprilo in Chrome o Safari (da localhost o https)');
+/* ---------- memoria utenti / progressi ---------- */
+let db={users:{},cur:null};
+try{db=JSON.parse(localStorage.getItem('jumpdb'))||db}catch(e){}
+const mkDefault=()=>{db.users.u1={name:'Io',height:175,jumps:[]};db.cur='u1'};
+if(!Object.keys(db.users).length)mkDefault();
+if(!db.users[db.cur])db.cur=Object.keys(db.users)[0];
+const save=()=>{try{localStorage.setItem('jumpdb',JSON.stringify(db))}catch(e){}};
+const U=()=>db.users[db.cur];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fD=x=>new Date(x).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'});
+const fDT=x=>fD(x)+' '+new Date(x).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+
+function renderAll(){
+  $('#usr').innerHTML=Object.entries(db.users).map(([k,u])=>`<option value="${k}"${k===db.cur?' selected':''}>${esc(u.name)}</option>`).join('');
+  $('#hgt').value=U().height;
+  const J=U().jumps,hs=J.map(j=>j.h),l5=hs.slice(-5),best=Math.max(...hs,-1),L=J[J.length-1];
+  $('#sRec').textContent=hs.length?best.toFixed(1):'–';
+  $('#sAvg').textContent=l5.length?(l5.reduce((a,b)=>a+b)/l5.length).toFixed(1):'–';
+  $('#sN').textContent=J.length;
+  $('#rH').textContent=L?L.h.toFixed(1):'–';$('#rT').textContent=L?Math.round(L.fl):'–';
+  $('#rD').textContent=L?Math.round(L.dx):'–';$('#rHip').textContent=L?Math.round(L.hip):'–';
+  $('#hist').innerHTML=J.slice(-6).reverse().map(j=>`<li class="${j.h===best?'best':''}"><span>${fDT(j.ts)}</span><span>${j.h.toFixed(1)} cm · ${Math.round(j.fl)} ms</span></li>`).join('');
+  drawProg(J);
+}
+function drawProg(J){
+  const w=pg.width,h=pg.height;px.clearRect(0,0,w,h);px.font='13px sans-serif';
+  const days={};J.forEach(j=>{const d=new Date(j.ts).toISOString().slice(0,10);days[d]=Math.max(days[d]||0,j.h)});
+  const k=Object.keys(days).sort();
+  if(!k.length){px.fillStyle='#5d6f84';px.textAlign='left';px.fillText('Nessun salto registrato',12,h/2);return}
+  const v=k.map(d=>days[d]),mx=Math.max(...v),mn=Math.min(...v),sp=(mx-mn)||5,lo=Math.max(0,mn-sp*.4),hi=mx+sp*.4;
+  const X=i=>k.length>1?34+i*(w-68)/(k.length-1):w/2,Y=y=>h-28-(y-lo)/(hi-lo)*(h-58);
+  px.strokeStyle='#2450ff';px.lineWidth=3;px.beginPath();v.forEach((y,i)=>i?px.lineTo(X(i),Y(y)):px.moveTo(X(i),Y(y)));px.stroke();
+  px.textAlign='center';
+  v.forEach((y,i)=>{px.fillStyle='#2450ff';px.beginPath();px.arc(X(i),Y(y),5,0,7);px.fill();px.fillStyle='#0f2238';px.fillText(y.toFixed(0),X(i),Y(y)-10)});
+  px.fillStyle='#5d6f84';px.textAlign='left';px.fillText(fD(k[0]),8,h-8);px.textAlign='right';px.fillText(fD(k[k.length-1]),w-8,h-8);
+}
+
+/* ---------- audio / stato ---------- */
+let ac;
+function beep(f=880,d=.12){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume&&ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.2;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+let lastSt='';
+function status(t,c=''){if(t+c===lastSt)return;lastSt=t+c;const s=$('#st');s.textContent=t;s.className=c}
 const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
+if(window.self!==window.top||!window.isSecureContext)status('Camera bloccata qui: apri la pagina in Safari/Chrome da https o localhost');
 
+/* ---------- modello e camera ---------- */
 async function initModel(){
   if(!PoseLandmarker)({PoseLandmarker,FilesetResolver}=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"));
   const fs=await FilesetResolver.forVisionTasks(WASM);
-  const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5});
-  try{landmarker=await mk("GPU")}catch(e){landmarker=await mk("CPU")}
+  const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.4,minPosePresenceConfidence:.4,minTrackingConfidence:.4});
+  if(delegate==='GPU'){try{landmarker=await mk('GPU');return}catch(e){delegate='CPU'}}
+  landmarker=await mk('CPU');
 }
-
+async function fallback(){
+  if(delegate==='CPU')return;delegate='CPU';errs=0;loopId++;landmarker=null;status('Passo alla modalità compatibile…');
+  try{await initModel();loop()}catch(e){status('Errore modello: ricarica la pagina')}
+}
 async function startCam(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('Camera non disponibile: apri la pagina da https o da localhost');return}
-  loopId++;
-  if(stream)stream.getTracks().forEach(t=>t.stop());
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('Camera non disponibile: serve https');return}
+  loopId++;if(stream)stream.getTracks().forEach(t=>t.stop());
   status('Avvio camera…');
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720},frameRate:{ideal:60}},audio:false});
-  }catch(e){status('Camera non accessibile ('+e.name+'): consenti il permesso nel browser e riprova');return}
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:640},height:{ideal:480},frameRate:{ideal:60,min:24}},audio:false})}
+  catch(e){status('Camera non accessibile ('+e.name+'): consenti il permesso e riprova');return}
   video.srcObject=stream;await video.play();
-  cv.width=video.videoWidth;cv.height=video.videoHeight;
-  stage.style.aspectRatio=cv.width+'/'+cv.height;
+  cv.width=video.videoWidth;cv.height=video.videoHeight;stage.style.aspectRatio=cv.width+'/'+cv.height;
   video.style.transform=cv.style.transform=facing==='user'?'scaleX(-1)':'none';
-  if(!landmarker){status('Carico il modello di riconoscimento…');try{await initModel()}catch(e){status('Modello non caricato ('+(e.message||e.name)+'): serve internet');return}}
+  if(!landmarker){status('Carico il modello…');try{await initModel()}catch(e){status('Modello non caricato ('+(e.message||e.name)+'): serve internet');return}}
   mode='idle';cal=null;sm=null;prev=null;air=null;trail=[];
   $('#bCal').disabled=false;$('#bFlip').disabled=false;$('#bStart').textContent='Riavvia camera';
-  status('Inquadra il corpo intero, poi premi Calibra');
   loop();
 }
-
 function loop(){
   const id=++loopId;
   const step=(now,meta)=>{
     if(id!==loopId)return;
-    if(video.readyState>=2){
+    if(video.readyState>=2&&landmarker){
       const t=((meta&&(meta.captureTime||meta.presentationTime))||now)/1000;
       try{process(t)}catch(e){console.error(e)}
     }
@@ -131,133 +184,139 @@ function loop(){
   sched();
 }
 
-const FEET=[29,30,31,32];
+/* ---------- misura ---------- */
+const FEET=[27,28,29,30,31,32];
 function measure(L,W,H){
-  const need=[0,23,24,27,28,29,30,31,32];
-  if(need.some(i=>(L[i].visibility??0)<.4))return null;
-  const my=a=>a.reduce((s,i)=>s+L[i].y,0)/a.length*H;
-  const mx=a=>a.reduce((s,i)=>s+L[i].x,0)/a.length*W;
-  return{foot:my(FEET),hip:my([23,24]),noseY:L[0].y*H,ankleY:my([27,28]),x:mx([27,28,29,30]),hx:mx([23,24])};
+  const wavg=(a,k)=>{let s=0,n=0;for(const i of a){const v=L[i].visibility??1;s+=L[i][k]*v;n+=v}return[n?s/n:0,n/a.length]};
+  const[fy,vf]=wavg(FEET,'y'),[fx]=wavg(FEET,'x'),[hy,vh]=wavg([23,24],'y'),[hx]=wavg([23,24],'x'),[ay]=wavg([27,28],'y');
+  if(vf<.3||vh<.3||(L[0].visibility??1)<.3)return null;
+  return{foot:fy*H,x:fx*W,hip:hy*H,hx:hx*W,ankleY:ay*H,noseY:L[0].y*H};
 }
-
 function process(t){
-  const now=performance.now();lastDet=Math.max(now,lastDet+1);
-  const r=landmarker.detectForVideo(video,lastDet);
-  const W=cv.width,H=cv.height;
-  ctx.clearRect(0,0,W,H);
-  ft.push(t);if(ft.length>30)ft.shift();
-  if(ft.length>5){const dt=(ft[ft.length-1]-ft[0])/(ft.length-1);$('#fps').textContent=Math.round(1/dt)+' fps · passo '+Math.round(dt*1000)+' ms'}
-  drawCal(W,H);
+  const now=performance.now()/1000;lastDet=Math.max(now*1000,lastDet+1);
+  let r;try{r=landmarker.detectForVideo(video,lastDet)}catch(e){if(++errs>3)fallback();return}
+  const W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
+  ft.push(now);if(ft.length>30)ft.shift();
+  if(ft.length>5)$('#fps').textContent='analisi '+Math.round((ft.length-1)/(now-ft[0]))+' fps';
   const L=r.landmarks&&r.landmarks[0];
-  if(!L){if(mode==='calib')calBuf=[];if(mode==='idle'||mode==='calib')status('Nessuna persona rilevata');return}
-  drawPose(L,W,H);
-  const m=measure(L,W,H);
-  if(!m){if(mode==='calib')calBuf=[];if(mode!=='air'&&mode!=='cool')status('Porta nel campo visivo anche i piedi');return}
+  if(L)drawPose(L,W,H);
+  drawCal(W,H);
+  if(mode==='count'){
+    const rem=Math.ceil(cdEnd-now);
+    if(rem<=0){mode='calib';calBuf=[];calStart=now;$('#cd').style.display='none';beep(1200,.25)}
+    else{$('#cd').style.display='block';$('#cd').textContent=rem;if(rem!==cdLast){cdLast=rem;beep(660)}status('Vai in posizione… calibrazione tra '+rem+' s')}
+    return;
+  }
+  if(mode==='idle'){status(L?'Premi Calibra: hai 3 s per posizionarti':'Nessuna persona rilevata');return}
+  const m=L&&measure(L,W,H);
+  if(!m){
+    if(mode==='calib')calBuf=[];
+    if(mode==='air'&&t-lastOk>.3){mode='armed';status('Tracciamento perso, riprova','go')}
+    else if(mode!=='air')status('Porta nel campo visivo corpo e piedi');
+    return;
+  }
+  lastOk=t;
 
   if(mode==='calib'){
-    calBuf.push(m);
-    const pct=Math.min(100,Math.round((t-calStart)/1.5*100));
-    status('Stai fermo… '+pct+'%');
-    if(t-calStart>=1.5){
-      const fy=calBuf.map(b=>b.foot),spread=Math.max(...fy)-Math.min(...fy);
-      if(spread>H*.03){calBuf=[];calStart=t;status('Troppo movimento: resta fermo');return}
-      const hcm=parseFloat($('#hgt').value)||175;
-      const bodyPx=med(calBuf.map(b=>b.ankleY-b.noseY));
-      cal={ground:med(fy),hip:med(calBuf.map(b=>b.hip)),bodyPx,scale:bodyPx/(0.88*hcm)};
-      mode='armed';sm=null;prev=null;status('Pronto: salta!','go');
+    calBuf.push(m);status('Fermo in piedi… '+Math.min(100,Math.round((now-calStart)/1.2*100))+'%');
+    if(now-calStart>=1.2){
+      const fy=calBuf.map(b=>b.foot).sort((a,b)=>a-b),bp=med(calBuf.map(b=>b.ankleY-b.noseY)),q=fy.length>>3;
+      if(calBuf.length<6||fy[fy.length-1-q]-fy[q]>.08*bp){calBuf=[];calStart=now;status('Troppo movimento: resta fermo');return}
+      cal={ground:med(fy),hip:med(calBuf.map(b=>b.hip)),bodyPx:bp,scale:bp/(.88*U().height)};
+      mode='armed';sm=0;prev=null;beep(880,.5);
     }
     return;
   }
   if(!cal)return;
 
-  const lift=cal.ground-m.foot;
-  sm=sm==null?lift:sm+.6*(lift-sm);
-  const thr=cal.bodyPx*THR;
+  const lift=cal.ground-m.foot,thr=cal.bodyPx*THR;
+  if(mode!=='air'&&lift<thr*.5)cal.ground+=.05*(m.foot-cal.ground); // la linea del suolo segue piccole derive
+  sm=sm==null?lift:sm+.7*(lift-sm);
   trace.push({t,v:sm});while(trace.length&&t-trace[0].t>4)trace.shift();
   drawTrace(thr);
 
-  if(mode==='cool'&&t>coolUntil&&sm<thr){mode='armed';status('Pronto: salta!','go')}
-  if(mode==='armed'&&prev&&sm>thr&&prev.sm<=thr){
-    const k=(thr-prev.sm)/(sm-prev.sm);
-    air={t0:prev.t+(t-prev.t)*k,x0:prev.x,peak:sm,hipMin:m.hip,x1:m.x};
-    trail=[];mode='air';status('In volo…','air');
+  if(mode==='cool'&&now>coolUntil&&sm<thr)mode='armed';
+  if(mode==='armed'){
+    status('Pronto: salta!','go');
+    if(prev&&prev.sm<=thr&&sm>thr){
+      const k=(thr-prev.sm)/(sm-prev.sm);
+      air={t0:prev.t+(t-prev.t)*k,x0:prev.x,peak:sm,hipMin:m.hip};trail=[];mode='air';status('In volo…','air');
+    }
   }else if(mode==='air'){
-    air.peak=Math.max(air.peak,sm);air.hipMin=Math.min(air.hipMin,m.hip);
-    trail.push([m.hx,m.hip]);
-    if(sm<thr&&prev.sm>=thr){
-      const k=(prev.sm-thr)/(prev.sm-sm),t1=prev.t+(t-prev.t)*k,fl=t1-air.t0;
-      if(fl>0.12&&fl<1.3&&air.peak>thr*2)finish(fl,Math.abs(m.x-air.x0)/cal.scale,(cal.hip-air.hipMin)/cal.scale);
-      else status('Movimento non valido, riprova','go');
-      if(mode==='air'){mode='armed'}
-      coolUntil=t+1.2;if(fl>0.12&&fl<1.3&&air.peak>thr*2)mode='cool';
-    }else if(t-air.t0>1.5){mode='armed';status('Salto non rilevato, riprova','go')}
+    air.peak=Math.max(air.peak,sm);air.hipMin=Math.min(air.hipMin,m.hip);trail.push([m.hx,m.hip]);
+    if(sm<thr){
+      const k=(prev.sm-thr)/((prev.sm-sm)||1),fl=prev.t+(t-prev.t)*k-air.t0,ok=fl>.15&&fl<1.2&&air.peak>thr*2;
+      if(ok)finish(fl,Math.abs(m.x-air.x0)/cal.scale,(cal.hip-air.hipMin)/cal.scale);
+      else status('Non valido ('+Math.round(fl*1000)+' ms): riprova','go');
+      mode=ok?'cool':'armed';coolUntil=now+1.5;
+    }else if(t-air.t0>1.6){mode='armed';cal.ground=m.foot;sm=0;status('Riallineato: riprova','go')}
   }
   prev={t,sm,x:m.x};
 }
-
-function finish(fl,dx,hipUp){
+function finish(fl,dx,hip){
   const h=G*fl*fl/8*100;
-  hist.push({h,fl:fl*1000});
-  $('#rH').textContent=h.toFixed(1);
-  $('#rT').textContent=Math.round(fl*1000);
-  $('#rD').textContent=Math.round(dx);
-  $('#rHip').textContent=hipUp.toFixed(0);
-  $('#rN').textContent=hist.length;
-  renderHist();
-  status('Salto registrato: '+h.toFixed(1)+' cm','go');
-}
-function renderHist(){
-  const best=Math.max(...hist.map(x=>x.h));
-  $('#hist').innerHTML=hist.map((x,i)=>`<li class="${x.h===best?'best':''}"><span>Salto ${i+1}</span><span>${x.h.toFixed(1)} cm · ${Math.round(x.fl)} ms</span></li>`).reverse().join('');
+  U().jumps.push({ts:Date.now(),h,fl:fl*1000,dx,hip});save();renderAll();
+  status('Salto registrato: '+h.toFixed(1)+' cm','go');beep(1000,.12);setTimeout(()=>beep(1400,.2),160);
 }
 
+/* ---------- disegno ---------- */
 const FACE=new Set([1,2,3,4,5,6,7,8,9,10]);
 function drawPose(L,W,H){
-  const lw=Math.max(2,W/320);
-  ctx.lineWidth=lw;ctx.strokeStyle='rgba(255,255,255,.9)';
+  const lw=Math.max(2,W/200);ctx.lineWidth=lw;ctx.strokeStyle='rgba(255,255,255,.9)';
   for(const c of PoseLandmarker.POSE_CONNECTIONS){
     if(FACE.has(c.start)||FACE.has(c.end))continue;
-    const a=L[c.start],b=L[c.end];
-    if((a.visibility??0)<.4||(b.visibility??0)<.4)continue;
+    const a=L[c.start],b=L[c.end];if((a.visibility??1)<.4||(b.visibility??1)<.4)continue;
     ctx.beginPath();ctx.moveTo(a.x*W,a.y*H);ctx.lineTo(b.x*W,b.y*H);ctx.stroke();
   }
   L.forEach((p,i)=>{
-    if(FACE.has(i)||(p.visibility??0)<.4)return;
-    ctx.fillStyle=i>=27?'#ff5a36':'#2450ff';
-    ctx.beginPath();ctx.arc(p.x*W,p.y*H,lw*1.9,0,7);ctx.fill();
-    ctx.strokeStyle='#fff';ctx.lineWidth=lw*.6;ctx.stroke();ctx.lineWidth=lw;
+    if(FACE.has(i)||(p.visibility??1)<.4)return;
+    ctx.fillStyle=i>=27?'#ff5a36':'#2450ff';ctx.beginPath();ctx.arc(p.x*W,p.y*H,lw*1.8,0,7);ctx.fill();
   });
-  if(trail.length>1){
-    ctx.strokeStyle='#ffd23f';ctx.lineWidth=lw*1.5;ctx.beginPath();
-    trail.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
-  }
+  if(trail.length>1){ctx.strokeStyle='#ffd23f';ctx.lineWidth=lw*1.5;ctx.beginPath();trail.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke()}
 }
-function drawCal(W,H){
-  if(!cal)return;
-  ctx.setLineDash([12,8]);ctx.lineWidth=2;
+function drawCal(W){
+  if(!cal)return;ctx.setLineDash([12,8]);ctx.lineWidth=2;
   ctx.strokeStyle='#ff5a36';ctx.beginPath();ctx.moveTo(0,cal.ground);ctx.lineTo(W,cal.ground);ctx.stroke();
-  ctx.strokeStyle='rgba(255,210,63,.8)';const ty=cal.ground-cal.bodyPx*THR;
-  ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();
-  ctx.setLineDash([]);
+  const ty=cal.ground-cal.bodyPx*THR;ctx.strokeStyle='rgba(255,210,63,.85)';ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();ctx.setLineDash([]);
 }
 function drawTrace(thr){
   const w=gc.width,h=gc.height;gx.clearRect(0,0,w,h);
-  const top=Math.max(thr*8,...trace.map(p=>p.v));
-  const y=v=>h-6-(Math.max(v,0)/top)*(h-12);
+  const top=Math.max(thr*8,...trace.map(p=>p.v)),y=v=>h-6-(Math.max(v,0)/top)*(h-12);
   gx.strokeStyle='#ffb199';gx.setLineDash([6,5]);gx.beginPath();gx.moveTo(0,y(thr));gx.lineTo(w,y(thr));gx.stroke();gx.setLineDash([]);
-  if(!trace.length)return;
-  const t0=trace[trace.length-1].t-4;
-  gx.strokeStyle='#2450ff';gx.lineWidth=2;gx.beginPath();
-  trace.forEach((p,i)=>{const x=(p.t-t0)/4*w;i?gx.lineTo(x,y(p.v)):gx.moveTo(x,y(p.v))});gx.stroke();
+  if(!trace.length)return;const t0=trace[trace.length-1].t-4;
+  gx.strokeStyle='#2450ff';gx.lineWidth=2;gx.beginPath();trace.forEach((p,i)=>{const x=(p.t-t0)/4*w;i?gx.lineTo(x,y(p.v)):gx.moveTo(x,y(p.v))});gx.stroke();
 }
 
+/* ---------- UI ---------- */
 $('#bStart').onclick=startCam;
 $('#bFlip').onclick=()=>{facing=facing==='user'?'environment':'user';startCam()};
 $('#bCal').onclick=()=>{
-  try{localStorage.setItem('hgt',$('#hgt').value)}catch(e){}
-  calBuf=[];calStart=performance.now()/1000;cal=null;trace=[];mode='calib';status('Stai fermo… 0%');
+  U().height=parseFloat($('#hgt').value)||175;save();beep(440,.05);
+  cal=null;trace=[];trail=[];prev=null;cdLast=0;cdEnd=performance.now()/1000+3;mode='count';
 };
-$('#bReset').onclick=()=>{hist=[];$('#hist').innerHTML='';['rH','rT','rD','rHip'].forEach(i=>$('#'+i).textContent='–');$('#rN').textContent='0'};
+$('#hgt').onchange=()=>{U().height=parseFloat($('#hgt').value)||175;save();if(cal){cal=null;mode='idle'}};
+$('#usr').onchange=e=>{db.cur=e.target.value;save();cal=null;if(mode!=='off')mode='idle';renderAll()};
+$('#bNew').onclick=()=>{
+  const n=(prompt('Nome del nuovo utente')||'').trim();if(!n)return;
+  const id='u'+Date.now();db.users[id]={name:n,height:parseFloat($('#hgt').value)||175,jumps:[]};db.cur=id;save();cal=null;if(mode!=='off')mode='idle';renderAll();
+};
+$('#bDel').onclick=()=>{
+  if(!confirm('Eliminare l’utente “'+U().name+'” e tutti i suoi salti?'))return;
+  delete db.users[db.cur];if(!Object.keys(db.users).length)mkDefault();db.cur=Object.keys(db.users)[0];save();cal=null;if(mode!=='off')mode='idle';renderAll();
+};
+$('#bUndo').onclick=()=>{U().jumps.pop();save();renderAll()};
+$('#bExp').onclick=()=>{
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db)],{type:'application/json'}));
+  a.download='salti-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+};
+$('#bImp').onclick=()=>$('#fImp').click();
+$('#fImp').onchange=async e=>{
+  try{const d=JSON.parse(await e.target.files[0].text());if(!d.users||!Object.keys(d.users).length)throw 0;
+    if(!confirm('Sostituire i dati attuali con il backup?'))return;db=d;if(!db.users[db.cur])db.cur=Object.keys(db.users)[0];save();renderAll()}
+  catch(x){alert('File di backup non valido')}
+  e.target.value='';
+};
+renderAll();
 </script>
 </body>
 </html>
